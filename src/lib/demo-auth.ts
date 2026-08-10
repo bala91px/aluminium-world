@@ -3,7 +3,7 @@ import type { Profile, Role } from "./types";
 
 const SESSION_KEY = "aw_demo_profile";
 
-export const DEMO_PROFILES: Array<Pick<Profile, "name" | "role">> = [
+export const DEMO_PROFILES: Array<{ name: string; role: "owner" | "supervisor" }> = [
   { name: "Arif", role: "owner" },
   { name: "Shafeeq", role: "supervisor" },
   { name: "Jaseem", role: "supervisor" },

@@ -104,6 +104,7 @@ export const t = {
   },
 
   quote: {
+    new: "New quote",
     number: "Quote no.",
     status: {
       draft: "Draft",

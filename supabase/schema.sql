@@ -370,6 +370,11 @@ begin
 end;
 $$;
 
+-- Column defaults so a plain client-side insert (no explicit RPC round-trip)
+-- still gets a sequential quote/job number for free.
+alter table quotes alter column quote_no set default next_quote_no();
+alter table jobs alter column job_no set default next_job_no();
+
 -- ============================================================================
 -- ROW LEVEL SECURITY
 -- ============================================================================
