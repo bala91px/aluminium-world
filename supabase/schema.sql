@@ -517,15 +517,17 @@ $$;
 create or replace function get_public_job(p_token text)
 returns table (
   job_no text, promised_date date, customer_name text, site_label text,
-  total numeric, paid numeric
+  total numeric, paid numeric, business_phone text
 )
 language sql security definer set search_path = public as $$
   select j.job_no, j.promised_date, c.name, s.label, q.total,
-         coalesce((select sum(p.amount) from payments p where p.job_id = j.id), 0)
+         coalesce((select sum(p.amount) from payments p where p.job_id = j.id), 0),
+         st.phone
   from jobs j
   join customers c on c.id = j.customer_id
   join sites s on s.id = j.site_id
   join quotes q on q.id = j.quote_id
+  cross join settings st
   where j.public_token = p_token;
 $$;
 
@@ -556,6 +558,17 @@ language sql security definer set search_path = public as $$
   where d.public_token = p_token;
 $$;
 
+create or replace function get_public_delivery_items(p_token text)
+returns table (item_type item_type_t, location_in_house text, quantity integer)
+language sql security definer set search_path = public as $$
+  select qi.item_type, qi.location_in_house, qi.quantity
+  from deliveries d
+  join jobs j on j.id = d.job_id
+  join quote_items qi on qi.quote_id = j.quote_id
+  where d.public_token = p_token
+  order by qi.sort_order;
+$$;
+
 create or replace function mark_delivered(p_token text)
 returns boolean
 language plpgsql security definer set search_path = public as $$
@@ -571,7 +584,7 @@ $$;
 revoke all on all tables in schema public from anon;
 grant execute on function
   get_public_quote, get_public_quote_items, accept_public_quote,
-  get_public_job, get_public_job_stages, get_public_delivery, mark_delivered
+  get_public_job, get_public_job_stages, get_public_delivery, get_public_delivery_items, mark_delivered
   to anon;
 
 -- ============================================================================

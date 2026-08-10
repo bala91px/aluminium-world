@@ -1,13 +1,19 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
 import type {
+  BlockedReason,
   Customer,
+  Delivery,
   Enquiry,
   EnquirySource,
+  Job,
+  JobStage,
+  PaymentMode,
   Profile,
   Quote,
   QuoteItem,
   QuoteStatus,
   Settings,
+  StageStatus,
   Vendor,
 } from "./types";
 
@@ -432,6 +438,185 @@ export async function markQuoteSent(id: string) {
     .eq("id", id);
   if (error) console.error("markQuoteSent", error);
   return !error;
+}
+
+// ---- Jobs, stages, payments ----
+
+export async function recordAdvanceAndCreateJob(input: {
+  quote: QuoteDetail;
+  amount: number;
+  mode: PaymentMode;
+  reference?: string;
+  recordedBy: string;
+}): Promise<Job | null> {
+  const sb = requireSupabase();
+  const { quote } = input;
+
+  const promisedDate = new Date();
+  promisedDate.setDate(promisedDate.getDate() + quote.lead_time_days);
+
+  const { data: job, error: jobError } = await sb
+    .from("jobs")
+    .insert({
+      quote_id: quote.id,
+      customer_id: quote.customer_id,
+      site_id: quote.site_id,
+      assigned_supervisor: quote.created_by,
+      promised_date: promisedDate.toISOString().slice(0, 10),
+    })
+    .select()
+    .single();
+
+  if (jobError || !job) {
+    console.error("recordAdvanceAndCreateJob job", jobError);
+    return null;
+  }
+
+  const { error: stagesError } = await sb.rpc("create_default_job_stages", {
+    p_job_id: job.id,
+  });
+  if (stagesError) console.error("create_default_job_stages", stagesError);
+
+  const { error: paymentError } = await sb.from("payments").insert({
+    job_id: job.id,
+    quote_id: quote.id,
+    type: "advance",
+    amount: input.amount,
+    mode: input.mode,
+    reference: input.reference || null,
+    recorded_by: input.recordedBy,
+  });
+  if (paymentError) console.error("recordAdvanceAndCreateJob payment", paymentError);
+
+  await sb
+    .from("job_stages")
+    .update({ status: "done", completed_at: new Date().toISOString(), updated_by: input.recordedBy })
+    .eq("job_id", job.id)
+    .eq("stage_key", "advance_received");
+
+  return job as Job;
+}
+
+export type JobDetail = Job & {
+  customers: { name: string; mobile: string } | null;
+  sites: { label: string; captured_address: string | null } | null;
+  quotes: { quote_no: string; total: number; advance_amount: number } | null;
+  job_stages: JobStage[];
+  payments: { amount: number; type: string }[];
+  deliveries: Delivery[];
+};
+
+export async function listJobs(): Promise<
+  (Job & { customers: { name: string } | null; job_stages: { status: StageStatus }[] })[]
+> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase
+    .from("jobs")
+    .select("*, customers(name), job_stages(status)")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("listJobs", error);
+    return [];
+  }
+  return data as unknown as (Job & {
+    customers: { name: string } | null;
+    job_stages: { status: StageStatus }[];
+  })[];
+}
+
+export async function getJobDetail(id: string): Promise<JobDetail | null> {
+  if (!isSupabaseConfigured || !supabase) return null;
+  const { data, error } = await supabase
+    .from("jobs")
+    .select(
+      "*, customers(name, mobile), sites(label, captured_address), quotes(quote_no, total, advance_amount), job_stages(*), payments(amount, type), deliveries(*)"
+    )
+    .eq("id", id)
+    .single();
+  if (error) {
+    console.error("getJobDetail", error);
+    return null;
+  }
+  const detail = data as unknown as JobDetail;
+  detail.job_stages.sort((a, b) => a.sequence - b.sequence);
+  return detail;
+}
+
+export async function updateJobStage(
+  stageId: string,
+  patch: {
+    status: StageStatus;
+    blocked_reason?: BlockedReason | null;
+    blocked_note?: string | null;
+    notes?: string | null;
+    updated_by: string;
+  }
+): Promise<boolean> {
+  const sb = requireSupabase();
+  const timestamps: Record<string, string | null> = {};
+  if (patch.status === "in_progress") timestamps.started_at = new Date().toISOString();
+  if (patch.status === "done") timestamps.completed_at = new Date().toISOString();
+  if (patch.status !== "blocked") {
+    timestamps.blocked_reason = null;
+    timestamps.blocked_note = null;
+  }
+  const { error } = await sb
+    .from("job_stages")
+    .update({ ...patch, ...timestamps })
+    .eq("id", stageId);
+  if (error) console.error("updateJobStage", error);
+  return !error;
+}
+
+export async function recordPayment(input: {
+  jobId: string;
+  quoteId: string;
+  type: "milestone" | "balance";
+  amount: number;
+  mode: PaymentMode;
+  reference?: string;
+  recordedBy: string;
+}): Promise<boolean> {
+  const sb = requireSupabase();
+  const { error } = await sb.from("payments").insert({
+    job_id: input.jobId,
+    quote_id: input.quoteId,
+    type: input.type,
+    amount: input.amount,
+    mode: input.mode,
+    reference: input.reference || null,
+    recorded_by: input.recordedBy,
+  });
+  if (error) console.error("recordPayment", error);
+  return !error;
+}
+
+export async function dispatchDelivery(input: {
+  jobId: string;
+  driverName: string;
+  driverMobile: string;
+}): Promise<Delivery | null> {
+  const sb = requireSupabase();
+  const { data, error } = await sb
+    .from("deliveries")
+    .insert({
+      job_id: input.jobId,
+      driver_name: input.driverName,
+      driver_mobile: input.driverMobile,
+      dispatched_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+  if (error) {
+    console.error("dispatchDelivery", error);
+    return null;
+  }
+  await sb
+    .from("job_stages")
+    .update({ status: "in_progress", started_at: new Date().toISOString() })
+    .eq("job_id", input.jobId)
+    .eq("stage_key", "out_for_delivery");
+  return data as Delivery;
 }
 
 // ---- Vendors ----

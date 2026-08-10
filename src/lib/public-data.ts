@@ -76,6 +76,7 @@ export type PublicJob = {
   site_label: string;
   total: number;
   paid: number;
+  business_phone: string | null;
 };
 
 export type PublicJobStage = {
@@ -125,6 +126,18 @@ export async function getPublicDelivery(token: string): Promise<PublicDelivery |
     return null;
   }
   return data[0] as PublicDelivery;
+}
+
+export type PublicDeliveryItem = { item_type: string; location_in_house: string; quantity: number };
+
+export async function getPublicDeliveryItems(token: string): Promise<PublicDeliveryItem[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase.rpc("get_public_delivery_items", { p_token: token });
+  if (error) {
+    console.error("getPublicDeliveryItems", error);
+    return [];
+  }
+  return (data ?? []) as PublicDeliveryItem[];
 }
 
 export async function markDelivered(token: string): Promise<boolean> {

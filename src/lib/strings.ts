@@ -196,6 +196,17 @@ export const t = {
     noAttentionItems: "Nothing needs your attention right now.",
   },
 
+  payments: {
+    recordAdvance: "Record advance payment",
+    recordAdvanceCta: (amount: string) => `Record ${amount} advance & start job`,
+    mode: "Payment mode",
+    reference: "Reference (optional)",
+    confirm: "Confirm payment",
+    recordMilestone: "Record milestone payment",
+    recordBalance: "Record balance payment",
+    amount: "Amount",
+  },
+
   delivery: {
     dispatch: "Dispatch",
     driverMobile: "Driver's mobile number",

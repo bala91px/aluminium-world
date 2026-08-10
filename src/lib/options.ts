@@ -43,3 +43,28 @@ export const HARDWARE = [
 export function labelFor(options: { value: string; label: string }[], value: string) {
   return options.find((o) => o.value === value)?.label ?? value;
 }
+
+export const STAGE_KEYS = [
+  "advance_received",
+  "material_procurement",
+  "cutting",
+  "fitting",
+  "powder_coating",
+  "glazing",
+  "quality_check",
+  "ready_for_delivery",
+  "out_for_delivery",
+  "delivered",
+  "installed",
+  "closed",
+] as const;
+
+export const BLOCKED_REASONS = [
+  { value: "awaiting_payment", label: "Awaiting payment" },
+  { value: "material_unavailable", label: "Material unavailable" },
+  { value: "vendor_delay", label: "Vendor delay" },
+  { value: "labour_shortage", label: "Labour shortage" },
+  { value: "customer_hold", label: "Customer hold" },
+  { value: "site_not_ready", label: "Site not ready" },
+  { value: "other", label: "Other" },
+];

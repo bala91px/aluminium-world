@@ -6,7 +6,14 @@ import { useSession } from "@/hooks/useSession";
 import { AppShell } from "@/components/AppShell";
 import { t } from "@/lib/strings";
 import { formatINR, formatDateDDMMYYYY } from "@/lib/format";
-import { approveQuote, getQuoteDetail, markQuoteSent, rejectQuote, type QuoteDetail } from "@/lib/data";
+import {
+  approveQuote,
+  getQuoteDetail,
+  markQuoteSent,
+  recordAdvanceAndCreateJob,
+  rejectQuote,
+  type QuoteDetail,
+} from "@/lib/data";
 import { ITEM_TYPES, GLASS_SPECS, labelFor } from "@/lib/options";
 import { waLink } from "@/lib/whatsapp";
 import { publicUrl } from "@/lib/site-url";
@@ -22,6 +29,9 @@ function QuoteView() {
   const [loading, setLoading] = useState(true);
   const [rejectReason, setRejectReason] = useState("");
   const [showReject, setShowReject] = useState(false);
+  const [showAdvance, setShowAdvance] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<"cash" | "upi" | "bank" | "cheque">("upi");
+  const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -65,6 +75,20 @@ function QuoteView() {
     const url = publicUrl("/q", quote.public_token);
     const message = `Hello ${quote.customers?.name}, here is your quotation from Aluminium World: ${url}`;
     window.open(waLink(quote.customers?.mobile ?? "", message), "_blank");
+  }
+
+  async function handleRecordAdvance() {
+    if (!quote || !profile) return;
+    setBusy(true);
+    const job = await recordAdvanceAndCreateJob({
+      quote,
+      amount: quote.advance_amount,
+      mode: paymentMode,
+      reference,
+      recordedBy: profile.id,
+    });
+    setBusy(false);
+    if (job) router.push(`/jobs/view?id=${job.id}`);
   }
 
   return (
@@ -174,6 +198,47 @@ function QuoteView() {
                   <QrCode value={publicUrl("/q", quote.public_token)} size={140} />
                   <p className="text-xs text-muted">{t.publicQuote.scanToOpen}</p>
                 </div>
+              </div>
+            )}
+
+            {quote.status === "accepted" && (
+              <div className="mt-5 flex flex-col gap-3 rounded-xl border border-border bg-surface p-4">
+                <p className="text-sm font-medium">{t.payments.recordAdvance}</p>
+                {showAdvance ? (
+                  <>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-muted">{t.payments.mode}</span>
+                      <select
+                        className="input"
+                        value={paymentMode}
+                        onChange={(e) => setPaymentMode(e.target.value as typeof paymentMode)}
+                      >
+                        <option value="upi">UPI</option>
+                        <option value="cash">Cash</option>
+                        <option value="bank">Bank transfer</option>
+                        <option value="cheque">Cheque</option>
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-muted">{t.payments.reference}</span>
+                      <input className="input" value={reference} onChange={(e) => setReference(e.target.value)} />
+                    </label>
+                    <button
+                      onClick={handleRecordAdvance}
+                      disabled={busy}
+                      className="rounded-lg bg-status-done px-4 py-3 text-sm font-medium text-white disabled:opacity-50"
+                    >
+                      {busy ? t.common.loading : t.payments.confirm}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setShowAdvance(true)}
+                    className="rounded-lg bg-accent px-4 py-3 text-sm font-medium text-accent-foreground"
+                  >
+                    {t.payments.recordAdvanceCta(formatINR(quote.advance_amount))}
+                  </button>
+                )}
               </div>
             )}
 
