@@ -619,7 +619,102 @@ export async function dispatchDelivery(input: {
   return data as Delivery;
 }
 
+export async function listCustomers(): Promise<Customer[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase.from("customers").select("*").order("name");
+  if (error) {
+    console.error("listCustomers", error);
+    return [];
+  }
+  return data as Customer[];
+}
+
+// ---- Dashboard ----
+
+export type DashboardJob = Job & {
+  customers: { name: string; mobile: string } | null;
+  quotes: { total: number } | null;
+  job_stages: { status: StageStatus; blocked_reason: BlockedReason | null; blocked_note: string | null; updated_by: string | null }[];
+  payments: { amount: number }[];
+};
+
+export type DashboardData = {
+  jobs: DashboardJob[];
+  pendingApprovals: (Quote & { customers: { name: string } | null })[];
+  staleQuotes: (Quote & { customers: { name: string } | null })[];
+  collectedThisMonth: number;
+};
+
+export async function getDashboardData(): Promise<DashboardData> {
+  if (!isSupabaseConfigured || !supabase) {
+    return { jobs: [], pendingApprovals: [], staleQuotes: [], collectedThisMonth: 0 };
+  }
+
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [jobsRes, pendingRes, staleRes, paymentsRes] = await Promise.all([
+    supabase
+      .from("jobs")
+      .select("*, customers(name, mobile), quotes(total), job_stages(status, blocked_reason, blocked_note, updated_by), payments(amount)")
+      .order("created_at", { ascending: false }),
+    listPendingApprovals(),
+    supabase
+      .from("quotes")
+      .select("*, customers(name)")
+      .eq("status", "sent")
+      .lt("sent_at", sevenDaysAgo),
+    supabase
+      .from("payments")
+      .select("amount")
+      .gte("received_on", startOfMonth.toISOString().slice(0, 10)),
+  ]);
+
+  if (jobsRes.error) console.error("getDashboardData jobs", jobsRes.error);
+  if (staleRes.error) console.error("getDashboardData stale", staleRes.error);
+  if (paymentsRes.error) console.error("getDashboardData payments", paymentsRes.error);
+
+  const collectedThisMonth = (paymentsRes.data ?? []).reduce(
+    (sum: number, p: { amount: number }) => sum + p.amount,
+    0
+  );
+
+  return {
+    jobs: (jobsRes.data ?? []) as unknown as DashboardJob[],
+    pendingApprovals: pendingRes,
+    staleQuotes: (staleRes.data ?? []) as unknown as (Quote & { customers: { name: string } | null })[],
+    collectedThisMonth,
+  };
+}
+
 // ---- Vendors ----
+
+export async function createVendor(input: {
+  company: string;
+  categories: string[];
+  mobile: string;
+  created_by: string;
+}): Promise<Vendor | null> {
+  const sb = requireSupabase();
+  const { data, error } = await sb.from("vendors").insert(input).select().single();
+  if (error) {
+    console.error("createVendor", error);
+    return null;
+  }
+  return data as Vendor;
+}
+
+export async function listVendorCategories(): Promise<string[]> {
+  if (!isSupabaseConfigured || !supabase) return [];
+  const { data, error } = await supabase.from("vendor_categories").select("name").order("sort_order");
+  if (error) {
+    console.error("listVendorCategories", error);
+    return [];
+  }
+  return (data ?? []).map((r) => r.name as string);
+}
 
 export async function searchVendors(query: string): Promise<Vendor[]> {
   if (!isSupabaseConfigured || !supabase) return [];
