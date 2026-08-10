@@ -343,6 +343,13 @@ async function uploadItemPhotos(inserted: QuoteItem[], source: NewQuoteItem[]) {
   }
 }
 
+export async function updateSettings(patch: Partial<Settings>) {
+  const sb = requireSupabase();
+  const { error } = await sb.from("settings").update(patch).eq("id", 1);
+  if (error) console.error("updateSettings", error);
+  return !error;
+}
+
 export async function listQuotes(): Promise<
   (Quote & { customers: { name: string } | null; sites: { label: string } | null })[]
 > {

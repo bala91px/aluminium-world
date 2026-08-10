@@ -9,6 +9,8 @@ import { formatINR, formatDateDDMMYYYY } from "@/lib/format";
 import { approveQuote, getQuoteDetail, markQuoteSent, rejectQuote, type QuoteDetail } from "@/lib/data";
 import { ITEM_TYPES, GLASS_SPECS, labelFor } from "@/lib/options";
 import { waLink } from "@/lib/whatsapp";
+import { publicUrl } from "@/lib/site-url";
+import { QrCode } from "@/components/QrCode";
 
 function QuoteView() {
   const { profile } = useSession();
@@ -60,7 +62,7 @@ function QuoteView() {
     await markQuoteSent(id);
     await refresh();
     setBusy(false);
-    const url = `${window.location.origin}${window.location.pathname.replace(/\/quotes\/view.*/, "")}/q?token=${quote.public_token}`;
+    const url = publicUrl("/q", quote.public_token);
     const message = `Hello ${quote.customers?.name}, here is your quotation from Aluminium World: ${url}`;
     window.open(waLink(quote.customers?.mobile ?? "", message), "_blank");
   }
@@ -160,13 +162,19 @@ function QuoteView() {
             )}
 
             {(quote.status === "approved" || quote.status === "sent") && quote.customers && (
-              <button
-                onClick={handleSendToCustomer}
-                disabled={busy}
-                className="mt-5 w-full rounded-lg bg-accent px-4 py-3 font-medium text-accent-foreground"
-              >
-                {t.publicQuote.whatsappUs}
-              </button>
+              <div className="mt-5 flex flex-col items-center gap-3">
+                <button
+                  onClick={handleSendToCustomer}
+                  disabled={busy}
+                  className="w-full rounded-lg bg-accent px-4 py-3 font-medium text-accent-foreground"
+                >
+                  {t.publicQuote.whatsappUs}
+                </button>
+                <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-4">
+                  <QrCode value={publicUrl("/q", quote.public_token)} size={140} />
+                  <p className="text-xs text-muted">{t.publicQuote.scanToOpen}</p>
+                </div>
+              </div>
             )}
 
             <button
