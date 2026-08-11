@@ -8,8 +8,15 @@ Prototype/demo build. Not production. Not for real customer data. Full spec:
 [AW_MVP_BUILD_SPEC.md](AW_MVP_BUILD_SPEC.md).
 
 ## 2. Live URLs
-- **Demo:** `https://bala91px.github.io/aluminium-world/` *(pending first deploy — confirm after Actions run)*
+- **Demo app:** `https://bala91px.github.io/aluminium-world/` *(pending first deploy — confirm after Actions run)*
+- **Landing site:** `https://bala91px.github.io/aluminium-world/landing/` *(pending first deploy)*
 - **Supabase project:** *(pending — Bala to create, see README-DEMO.md)*
+
+**Two projects, one repo.** The demo app (`src/`) and the landing site
+(`landing/`) are independent — different stacks, no shared code, no shared
+tokens. They only share a repository and a single Pages deploy. Never apply the
+landing site's brand red to the app: the app stays greyscale until Arif signs off
+on a logo. That mistake has been made once already.
 
 ## 3. Stack
 - Next.js (App Router, TypeScript), static export (`output: 'export'`)
@@ -30,10 +37,19 @@ lesson). Requires repo secrets `NEXT_PUBLIC_SUPABASE_URL` and
 `NEXT_PUBLIC_SUPABASE_ANON_KEY` (Settings → Secrets and variables → Actions).
 
 ## 6. Local preview
+Demo app:
 ```bash
 npm install
 cp .env.local.example .env.local   # fill in Supabase URL + anon key
 npm run dev
+```
+Landing site (no build step, no dependencies):
+```bash
+python3 -m http.server 8123 --directory landing
+```
+Regenerate the isometric CAD illustrations after editing their geometry:
+```bash
+node landing/tools/gen-illustrations.mjs
 ```
 
 ## 7. Backend / Supabase
